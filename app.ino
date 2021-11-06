@@ -1,3 +1,6 @@
+//Libraries
+#include <PID_v1.h>
+
 //Sensor pins names
 #define ADC_0 A0
 #define ADC_1 A1
@@ -20,6 +23,26 @@
 #define MOTOR1_L 11
 #define MOTOR2_L 12
 #define STBY 4
+
+//Global val
+int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //table with pin numbers of each sensor
+int weight[8] = {-450, -300, -180, -65, 65, 180, 300, 450};              //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
+int treshold = 250;                                                      //border between ground and line
+int left_motor_PWM, right_motor_PWM;
+
+//PID global values
+double setpoint_sensors, input_sensors, output_sensors; //Variables we'll be connecting to
+double setpoint_left_motor, input_left_motor, output_left_motor;
+double setpoint_right_motor, input_right_motor, output_right_motor;
+
+//Specify the links and initial tuning parameters
+double Kp_sensors = 20, Ki_sensors = 2, Kd_sensors = 55;
+double Kp_left_motor = 20, Ki_left_motor = 2, Kd_left_motor = 55;
+double Kp_right_motor = 20, Ki_right_motor = 2, Kd_right_motor = 55;
+
+PID myPID_sensors(&input_sensors, &output_sensors, &setpoint_sensors, Kp_sensors, Ki_sensors, Kd_sensors, DIRECT);
+PID myPID_left_motor(&input_left_motor, &output_left_motor, &setpoint_left_motor, Kp_left_motor, Ki_left_motor, Kd_left_motor, DIRECT);
+PID myPID_right_motor(&input_right_motor, &output_right_motor, &setpoint_right_motor, Kp_right_motor, Ki_right_motor, Kd_right_motor, DIRECT);
 
 int *SensorsRead() //Function reads values from reflective sensors and returns them as an array
 {
@@ -60,11 +83,9 @@ void encodersState() //Function returns the current value read from the encoders
     ;
 }
 
-int error(int treshold) //Function calculates the value of regulation error
+int sensors_error() //Function calculates the value of sensores regulation error
 {
     int error = 0;
-    int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7};
-    int weight[8] = {-300, -200, -100, -1, 1, 100, 200, 300};
 
     for (int i = 0; i < 8; i++)
     {
@@ -73,6 +94,22 @@ int error(int treshold) //Function calculates the value of regulation error
             error = error + weight[i];
         };
     };
+
+    return error;
+}
+
+int left_motor_error() //Function calculates the value of left motor regulation error
+{
+    int error = 0;
+    //TODO
+
+    return error;
+}
+
+int right_motor_error() //Function calculates the value of right motor regulation error
+{
+    int error = 0;
+    //TODO
 
     return error;
 }
@@ -118,9 +155,45 @@ void setup()
     pinMode(STBY, OUTPUT);
 
     digitalWrite(STBY, HIGH);
+
+    //Sensore PID
+    //PID - initialize the variables we're linked to
+    input_sensors = sensors_error();
+    setpoint_sensors = 0;
+    //turn the PID on
+    myPID_sensors.SetMode(AUTOMATIC);
+    myPID_sensors.SetOutputLimits(-25, 25);
+
+    //Left Motor PID
+    input_left_motor = left_motor_PWM;
+    setpoint_left_motor = left_motor_PWM;
+
+    myPID_left_motor.SetMode(AUTOMATIC);
+    myPID_left_motor.SetOutputLimits(0, 255);
+
+    //Right Motor PID
+    input_right_motor = right_motor_PWM;
+    setpoint_right_motor = right_motor_PWM;
+
+    myPID_right_motor.SetMode(AUTOMATIC);
+    myPID_right_motor.SetOutputLimits(0, 255);
+
+    drive(left_motor_PWM, right_motor_PWM);
 }
 
 void loop()
 {
-    ;
+    //Sensor PID output calculate
+    input_sensors = sensors_error();
+    myPID_sensors.Compute();
+
+    //Left Motor output calculate
+    input_left_motor = left_motor_error();
+    myPID_left_motor.Compute();
+
+    //Right Motor output calculate
+    input_right_motor = right_motor_error();
+    myPID_right_motor.Compute();
+
+    drive(output_left_motor, output_right_motor);
 }
