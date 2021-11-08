@@ -24,11 +24,22 @@
 #define MOTOR2_L 12
 #define STBY 4
 
-//Global val
-int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //table with pin numbers of each sensor
-int weight[8] = {-450, -300, -180, -65, 65, 180, 300, 450};              //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
-int treshold = 250;                                                      //border between ground and line
-int left_motor_PWM, right_motor_PWM;
+//Global values
+unsigned int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //table with pin numbers of each sensor
+int weight[8] = {-450, -300, -180, -65, 65, 180, 300, 450};                       //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
+unsigned int treshold = 250;                                                      //border between ground and line
+unsigned int left_motor_PWM, right_motor_PWM;                                     //variables for current motors PWM
+unsigned int max_RPM = 33333;                                                     //max RMP where PWM = 255
+unsigned int left_motor_RPM, right_motor_RPM;                                     //variables for current motors RPM
+unsigned int left_motor_counter = 0;
+unsigned int right_motor_counter = 0;
+unsigned int current_time = 0;
+unsigned int previous_time = 0;
+int current_left_encoder_state = 0;
+int previous_left_encoder_state = 0;
+int current_right_encoder_state = 0;
+int previous_right_encoder_state = 0;
+int normal_speed = 150;
 
 //PID global values
 double setpoint_sensors, input_sensors, output_sensors; //Variables we'll be connecting to
@@ -78,9 +89,68 @@ void printSendorData() //Function reads values using SensorsRead() and writes th
     delay(200);
 }
 
-void encodersState() //Function returns the current value read from the encoders
+void countLeftEncoder() //Function counts left encoder state changes (only on one channel(MOTOR1_L) - 6 counts per revolution)
 {
-    ;
+    current_left_encoder_state = digitalRead(MOTOR1_L);
+    if (current_left_encoder_state != previous_left_encoder_state)
+    {
+        left_motor_counter++;
+    }
+    previous_left_encoder_state = current_left_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
+}
+
+void countRightEncoder() //Function counts right encoder state changes (only on one channel(MOTOR1_R) - 6 counts per revolution)
+{
+    current_right_encoder_state = digitalRead(MOTOR1_R);
+    if (current_right_encoder_state != previous_right_encoder_state)
+    {
+        right_motor_counter++;
+    }
+    previous_right_encoder_state = current_right_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
+}
+
+void currentLeftMotorRPM() //Function measures and calculates the current left motor RPM
+{
+    left_motor_counter = 0;
+    previous_time = millis();
+    current_time = previous_time;
+
+    while ((current_time - previous_time) < 100)
+    {
+        countLeftEncoder();
+        current_time = millis();
+    }
+
+    left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
+}
+
+void currentRightMotorRPM() //Function measures and calculates the current right motor RPM
+{
+    right_motor_counter = 0;
+    previous_time = millis();
+    current_time = previous_time;
+
+    while ((current_time - previous_time) < 100)
+    {
+        countRightEncoder();
+        current_time = millis();
+    }
+
+    right_motor_RPM = right_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
+}
+
+int RPMtoPWM(int RPM) //Converts RPM value to PWM
+{
+    int PWM = map(RPM, 0, max_RPM, 0, 255);
+
+    return PWM;
+}
+
+int PWMtoRPM(int PWM) //Converts PWM value to RPM
+{
+    int RPM = map(PWM, 0, 255, 0, max_RPM);
+
+    return RPM;
 }
 
 int sensors_error() //Function calculates the value of sensores regulation error
@@ -100,16 +170,17 @@ int sensors_error() //Function calculates the value of sensores regulation error
 
 int left_motor_error() //Function calculates the value of left motor regulation error
 {
-    int error = 0;
-    //TODO
+    currentLeftMotorRPM();
+    int error = RPMtoPWM(left_motor_RPM);
 
+    // tylko to chyba jednak nie error tylko po prosty aktulana wartość PWM
     return error;
 }
 
 int right_motor_error() //Function calculates the value of right motor regulation error
 {
-    int error = 0;
-    //TODO
+    currentRightMotorRPM();
+    int error = RPMtoPWM(right_motor_RPM);
 
     return error;
 }
@@ -125,7 +196,7 @@ void drive(int PWMA_value, int PWMB_value) //Function for setting the specified 
     analogWrite(PWMB, PWMB_value);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup()
 {
@@ -162,7 +233,7 @@ void setup()
     setpoint_sensors = 0;
     //turn the PID on
     myPID_sensors.SetMode(AUTOMATIC);
-    myPID_sensors.SetOutputLimits(-25, 25);
+    myPID_sensors.SetOutputLimits(-50, 50);
 
     //Left Motor PID
     input_left_motor = left_motor_PWM;
@@ -188,10 +259,12 @@ void loop()
     myPID_sensors.Compute();
 
     //Left Motor output calculate
+    setpoint_left_motor = normal_speed - output_sensors; //sprawdzić czy na pewno -
     input_left_motor = left_motor_error();
     myPID_left_motor.Compute();
 
     //Right Motor output calculate
+    setpoint_right_motor = normal_speed + output_sensors; //sprawdzić czy na pewno +
     input_right_motor = right_motor_error();
     myPID_right_motor.Compute();
 
