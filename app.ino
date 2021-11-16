@@ -26,10 +26,10 @@
 
 //Global values
 unsigned int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //table with pin numbers of each sensor
-int weight[8] = {-450, -300, -180, -65, 65, 180, 300, 450};                       //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
+int weight[8] = {-450, -300, -180, -64, 64, 180, 300, 450};                       //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
 unsigned int treshold = 250;                                                      //border between ground and line
-unsigned int left_motor_PWM, right_motor_PWM;                                     //variables for current motors PWM
-unsigned int max_RPM = 33333;                                                     //max RMP where PWM = 255
+unsigned int max_RPM_left_motor = 33333;                                          //max RMP where PWM = 255
+unsigned int max_RPM_right_motor = 33333;                                         //TODO: Zmierzyć
 unsigned int left_motor_RPM, right_motor_RPM;                                     //variables for current motors RPM
 unsigned int left_motor_counter = 0;
 unsigned int right_motor_counter = 0;
@@ -39,21 +39,20 @@ int current_left_encoder_state = 0;
 int previous_left_encoder_state = 0;
 int current_right_encoder_state = 0;
 int previous_right_encoder_state = 0;
-int normal_speed = 150;
+int normal_speed = 100;
+int state = 1;
+int last_error = 0;
+int output_sensors = 0;
 
 //PID global values
-double setpoint_sensors, input_sensors, output_sensors; //Variables we'll be connecting to
 double setpoint_left_motor, input_left_motor, output_left_motor;
 double setpoint_right_motor, input_right_motor, output_right_motor;
 
 //Specify the links and initial tuning parameters
-double Kp_sensors = 20, Ki_sensors = 2, Kd_sensors = 55;
-double Kp_left_motor = 20, Ki_left_motor = 2, Kd_left_motor = 55;
-double Kp_right_motor = 20, Ki_right_motor = 2, Kd_right_motor = 55;
+double Kp = 0.044, Ki = 0.87, Kd = 0.005;
 
-PID myPID_sensors(&input_sensors, &output_sensors, &setpoint_sensors, Kp_sensors, Ki_sensors, Kd_sensors, DIRECT);
-PID myPID_left_motor(&input_left_motor, &output_left_motor, &setpoint_left_motor, Kp_left_motor, Ki_left_motor, Kd_left_motor, DIRECT);
-PID myPID_right_motor(&input_right_motor, &output_right_motor, &setpoint_right_motor, Kp_right_motor, Ki_right_motor, Kd_right_motor, DIRECT);
+PID myPID_left_motor(&input_left_motor, &output_left_motor, &setpoint_left_motor, Kp, Ki, Kd, DIRECT);
+PID myPID_right_motor(&input_right_motor, &output_right_motor, &setpoint_right_motor, Kp, Ki, Kd, DIRECT);
 
 int *SensorsRead() //Function reads values from reflective sensors and returns them as an array
 {
@@ -110,15 +109,13 @@ void countRightEncoder() //Function counts right encoder state changes (only on 
 }
 
 void currentLeftMotorRPM() //Function measures and calculates the current left motor RPM
-{
+{                          //TODO: Postarać się skrócić czas pomiarów
     left_motor_counter = 0;
     previous_time = millis();
-    current_time = previous_time;
 
-    while ((current_time - previous_time) < 100)
+    while ((millis() - previous_time) < 100)
     {
         countLeftEncoder();
-        current_time = millis();
     }
 
     left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
@@ -128,64 +125,59 @@ void currentRightMotorRPM() //Function measures and calculates the current right
 {
     right_motor_counter = 0;
     previous_time = millis();
-    current_time = previous_time;
 
-    while ((current_time - previous_time) < 100)
+    while ((millis() - previous_time) < 100)
     {
         countRightEncoder();
-        current_time = millis();
     }
 
     right_motor_RPM = right_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
 }
 
-int RPMtoPWM(int RPM) //Converts RPM value to PWM
-{
-    int PWM = map(RPM, 0, max_RPM, 0, 255);
-
-    return PWM;
-}
-
-int PWMtoRPM(int PWM) //Converts PWM value to RPM
-{
-    int RPM = map(PWM, 0, 255, 0, max_RPM);
-
-    return RPM;
-}
-
 int sensors_error() //Function calculates the value of sensores regulation error
 {
     int error = 0;
+    int counter = 0;
 
     for (int i = 0; i < 8; i++)
     {
-        if (analogRead(ADC_x[i]) < treshold)
+        if (analogRead(ADC_x[i]) > treshold)
         {
             error = error + weight[i];
+            counter = counter + 1;
         };
     };
 
+    if (counter == 0)
+    {
+        error = last_error;
+    }
+    else
+    {
+        error = error / counter;
+        last_error = error;
+    }
+
     return error;
 }
 
-int left_motor_error() //Function calculates the value of left motor regulation error
+int left_motor_PWM() //Function calculates the value of left motor PWM
 {
     currentLeftMotorRPM();
-    int error = RPMtoPWM(left_motor_RPM);
+    int error = map(left_motor_RPM, 0, max_RPM_left_motor, 0, 255);
 
-    // tylko to chyba jednak nie error tylko po prosty aktulana wartość PWM
     return error;
 }
 
-int right_motor_error() //Function calculates the value of right motor regulation error
+int right_motor_PWM() //Function calculates the value of right motor PWM
 {
     currentRightMotorRPM();
-    int error = RPMtoPWM(right_motor_RPM);
+    int error = int error = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
 
     return error;
 }
 
-void drive(int PWMA_value, int PWMB_value) //Function for setting the specified filling of the PWM signal for motors
+void drive(int PWMB_value, int PWMA_value) //Function for setting the specified filling of the PWM signal for motors (left, right)
 {
     digitalWrite(AIN1, HIGH);
     digitalWrite(AIN2, LOW);
@@ -227,46 +219,85 @@ void setup()
 
     digitalWrite(STBY, HIGH);
 
-    //Sensore PID
-    //PID - initialize the variables we're linked to
-    input_sensors = sensors_error();
-    setpoint_sensors = 0;
-    //turn the PID on
-    myPID_sensors.SetMode(AUTOMATIC);
-    myPID_sensors.SetOutputLimits(-50, 50);
-
     //Left Motor PID
-    input_left_motor = left_motor_PWM;
-    setpoint_left_motor = left_motor_PWM;
+    input_left_motor = 0;
+    setpoint_left_motor = 0;
 
     myPID_left_motor.SetMode(AUTOMATIC);
     myPID_left_motor.SetOutputLimits(0, 255);
 
     //Right Motor PID
-    input_right_motor = right_motor_PWM;
-    setpoint_right_motor = right_motor_PWM;
+    input_right_motor = 0;
+    setpoint_right_motor = 0;
 
     myPID_right_motor.SetMode(AUTOMATIC);
     myPID_right_motor.SetOutputLimits(0, 255);
-
-    drive(left_motor_PWM, right_motor_PWM);
 }
 
 void loop()
 {
-    //Sensor PID output calculate
-    input_sensors = sensors_error();
-    myPID_sensors.Compute();
+    if (state == 1)
+    {
+        output_sensors = sensors_error();
+        int output_sensors_ = map(abs(output_sensors), 0, 450, 0, 50);
 
-    //Left Motor output calculate
-    setpoint_left_motor = normal_speed - output_sensors; //sprawdzić czy na pewno -
-    input_left_motor = left_motor_error();
-    myPID_left_motor.Compute();
+        if (output_sensors > 0)
+        {
+            setpoint_left_motor = normal_speed - output_sensors_;
+            setpoint_right_motor = normal_speed + output_sensors_;
+        }
+        else
+        {
+            setpoint_left_motor = normal_speed + output_sensors_;
+            setpoint_right_motor = normal_speed - output_sensors_;
+        }
 
-    //Right Motor output calculate
-    setpoint_right_motor = normal_speed + output_sensors; //sprawdzić czy na pewno +
-    input_right_motor = right_motor_error();
-    myPID_right_motor.Compute();
+        input_left_motor = left_motor_PWM();
+        input_right_motor = right_motor_PWM();
 
-    drive(output_left_motor, output_right_motor);
+        Serial.print("* ");
+        Serial.print(output_sensors);
+        Serial.print(" ");
+        Serial.print(setpoint_left_motor);
+        Serial.print(" ");
+        Serial.print(setpoint_right_motor);
+        Serial.print(" ");
+        Serial.print(input_left_motor);
+        Serial.print(" ");
+        Serial.print(input_right_motor);
+        Serial.println(" ");
+        myPID_left_motor.Compute();
+        myPID_right_motor.Compute();
+
+        drive(output_left_motor, output_right_motor);
+    }
+    else
+    {
+        drive(0, 0);
+    }
+}
+
+void serialEvent()
+{
+    while (Serial.available())
+    {
+        state = Serial.readStringUntil(';').toInt();
+
+        if (state != 0)
+        {
+            double Kp_ = Serial.readStringUntil(';').toDouble();
+            Kp = (Kp_ == 0 ? Kp : Kp_);
+            double Ki_ = Serial.readStringUntil(';').toDouble();
+            Ki = (Ki_ == 0 ? Ki : Ki_);
+            double Kd_ = Serial.readStringUntil(';').toDouble();
+            Kd = (Kd_ == 0 ? Kd : Kd_);
+            int normal_speed_ = Serial.readStringUntil(';').toInt();
+            normal_speed = (normal_speed_ == 0 ? normal_speed : normal_speed_);
+            int treshold_ = Serial.readStringUntil(';').toInt();
+            treshold = (treshold_ == 0 ? treshold : treshold_);
+
+            myPID_left_motor.SetMode(AUTOMATIC);
+            myPID_right_motor.SetMode(AUTOMATIC);
+        }
+    }
 }
