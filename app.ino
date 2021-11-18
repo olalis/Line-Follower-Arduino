@@ -261,6 +261,11 @@ void loop()
         Serial.print(left_encoder_test);
         Serial.print(", Right Encoder: ");
         Serial.println(right_encoder_test);
+
+        // //TEST
+        // drive(255, 255);
+        // maxRPMLeftMotorTest();
+        // maxRPMRightMotorTest();
     }
     else
     {
@@ -290,5 +295,43 @@ void serialEvent()
             myPID_left_motor.SetMode(AUTOMATIC);
             myPID_right_motor.SetMode(AUTOMATIC);
         }
+    }
+}
+
+void maxRPMLeftMotorTest()
+{
+    current_left_encoder_state = digitalRead(MOTOR1_L);
+    if (current_left_encoder_state != previous_left_encoder_state)
+    {
+        previous_left_encoder_state = current_left_encoder_state;
+        left_encoder_deltas[0] = left_encoder_deltas[1];
+        left_encoder_deltas[1] = left_encoder_deltas[2];
+        current_time = micros();
+        left_encoder_deltas[2] = current_time - previous_time_left_encoder;
+        previous_time_left_encoder = current_time;
+
+        int time_avg = (left_encoder_deltas[0] + (2 * left_encoder_deltas[1]) + (3 * left_encoder_deltas[2])) / 6;
+        left_motor_RPM = 60000000 / time_avg;
+        Serial.print("Left Motor RPM: ");
+        Serial.println(left_motor_RPM);
+    }
+}
+
+void maxRPMRightMotorTest()
+{
+    current_right_encoder_state = digitalRead(MOTOR1_R);
+    if (current_right_encoder_state != previous_right_encoder_state)
+    {
+        previous_right_encoder_state = current_right_encoder_state;
+        right_encoder_deltas[0] = right_encoder_deltas[1];
+        right_encoder_deltas[1] = right_encoder_deltas[2];
+        current_time = micros();
+        right_encoder_deltas[2] = current_time - previous_time_right_encoder;
+        previous_time_right_encoder = current_time;
+
+        int time_avg = (right_encoder_deltas[0] + (2 * right_encoder_deltas[1]) + (3 * right_encoder_deltas[2])) / 6;
+        right_motor_RPM = 60000000 / time_avg;
+        Serial.print("Right Motor RPM: ");
+        Serial.println(right_motor_RPM);
     }
 }
