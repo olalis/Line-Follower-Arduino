@@ -290,6 +290,8 @@ void loop()
         input_left_motor = left_motor_PWM();
         input_right_motor = right_motor_PWM();
 
+        //test
+
         Serial.print("* ");
         Serial.print(output_sensors);
         Serial.print(" ");
