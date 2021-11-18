@@ -116,24 +116,6 @@ int sensors_error() //Function calculates the value of sensores regulation error
     return error;
 }
 
-int left_motor_PWM() //Function calculates the value of left motor PWM
-{
-    int time_avg = (left_encoder_deltas[0] + (2 * left_encoder_deltas[1]) + (3 * left_encoder_deltas[2])) / 6;
-    left_motor_RPM = 60000000 / time_avg;
-    int error = map(left_motor_RPM, 0, max_RPM_left_motor, 0, 255);
-
-    return error;
-}
-
-int right_motor_PWM() //Function calculates the value of right motor PWM
-{
-    int time_avg = (right_encoder_deltas[0] + (2 * right_encoder_deltas[1]) + (3 * right_encoder_deltas[2])) / 6;
-    left_motor_RPM = 60000000 / time_avg;
-    int error = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
-
-    return error;
-}
-
 void drive(int PWMB_value, int PWMA_value) //Function for setting the specified filling of the PWM signal for motors (left, right)
 {
     digitalWrite(AIN1, HIGH);
@@ -199,6 +181,9 @@ int left_encoder_test = 0;
 int right_encoder_test = 0;
 //
 
+unsigned int left_encoder_counter = 0;
+unsigned int right_encoder_counter = 0;
+
 void loop()
 { //Sprawdzić czy pętla główna wykona się 10x szybciej niż będą zliczały się enkodery!!!
     if (state == 1)
@@ -226,14 +211,17 @@ void loop()
         {
             left_encoder_test++; //TEST - DO USUNIĘCIA
 
+            left_encoder_counter++;
             previous_left_encoder_state = current_left_encoder_state;
-            left_encoder_deltas[0] = left_encoder_deltas[1];
-            left_encoder_deltas[1] = left_encoder_deltas[2];
-            current_time = micros();
-            left_encoder_deltas[2] = current_time - previous_time_left_encoder;
-            previous_time_left_encoder = current_time;
+        }
 
-            input_left_motor = left_motor_PWM();
+        if (left_encoder_counter >= 50)
+        {
+            int time_avg = (micros() - previous_time_left_encoder) / 50;
+            previous_time_left_encoder = micros();
+
+            left_motor_RPM = 60000000 / time_avg;
+            input_left_motor = map(left_motor_RPM, 0, max_RPM_left_motor, 0, 255);
         }
 
         //Measure time of one state change of the right encoder
@@ -242,14 +230,17 @@ void loop()
         {
             right_encoder_test++; //TEST - DO USUNIĘCIA
 
+            right_encoder_counter++;
             previous_right_encoder_state = current_right_encoder_state;
-            right_encoder_deltas[0] = right_encoder_deltas[1];
-            right_encoder_deltas[1] = right_encoder_deltas[2];
-            current_time = micros();
-            right_encoder_deltas[2] = current_time - previous_time_right_encoder;
-            previous_time_right_encoder = current_time;
+        }
 
-            input_right_motor = right_motor_PWM();
+        if (right_encoder_counter >= 50)
+        {
+            int time_avg = (micros() - previous_time_right_encoder) / 50;
+            previous_time_right_encoder = micros();
+
+            right_motor_RPM = 60000000 / time_avg;
+            input_right_motor = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
         }
 
         myPID_left_motor.Compute();
@@ -305,14 +296,15 @@ void maxRPMLeftMotorTest()
     current_left_encoder_state = digitalRead(MOTOR1_L);
     if (current_left_encoder_state != previous_left_encoder_state)
     {
+        left_encoder_counter++;
         previous_left_encoder_state = current_left_encoder_state;
-        left_encoder_deltas[0] = left_encoder_deltas[1];
-        left_encoder_deltas[1] = left_encoder_deltas[2];
-        current_time = micros();
-        left_encoder_deltas[2] = current_time - previous_time_left_encoder;
-        previous_time_left_encoder = current_time;
+    }
 
-        int time_avg = (left_encoder_deltas[0] + (2 * left_encoder_deltas[1]) + (3 * left_encoder_deltas[2])) / 6;
+    if (left_encoder_counter >= 50)
+    {
+        int time_avg = (micros() - previous_time_left_encoder) / 50;
+        previous_time_left_encoder = micros();
+
         left_motor_RPM = 60000000 / time_avg;
         Serial.print("Left Motor RPM: ");
         Serial.println(left_motor_RPM);
@@ -324,14 +316,15 @@ void maxRPMRightMotorTest()
     current_right_encoder_state = digitalRead(MOTOR1_R);
     if (current_right_encoder_state != previous_right_encoder_state)
     {
+        right_encoder_counter++;
         previous_right_encoder_state = current_right_encoder_state;
-        right_encoder_deltas[0] = right_encoder_deltas[1];
-        right_encoder_deltas[1] = right_encoder_deltas[2];
-        current_time = micros();
-        right_encoder_deltas[2] = current_time - previous_time_right_encoder;
-        previous_time_right_encoder = current_time;
+    }
 
-        int time_avg = (right_encoder_deltas[0] + (2 * right_encoder_deltas[1]) + (3 * right_encoder_deltas[2])) / 6;
+    if (right_encoder_counter >= 50)
+    {
+        int time_avg = (micros() - previous_time_right_encoder) / 50;
+        previous_time_right_encoder = micros();
+
         right_motor_RPM = 60000000 / time_avg;
         Serial.print("Right Motor RPM: ");
         Serial.println(right_motor_RPM);
