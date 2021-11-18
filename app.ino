@@ -193,9 +193,11 @@ void setup()
     myPID_right_motor.SetOutputLimits(0, 255);
 }
 
+// TEST - DO USUNIĘCIA
 int loop_test = 0;
 int left_encoder_test = 0;
 int right_encoder_test = 0;
+//
 
 void loop()
 { //Sprawdzić czy pętla główna wykona się 10x szybciej niż będą zliczały się enkodery!!!
