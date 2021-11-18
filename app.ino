@@ -25,23 +25,24 @@
 #define STBY 4
 
 //Global values
-unsigned int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //table with pin numbers of each sensor
-int weight[8] = {-450, -300, -180, -64, 64, 180, 300, 450};                       //table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
-unsigned int treshold = 250;                                                      //border between ground and line
-unsigned int max_RPM_left_motor = 33333;                                          //max RMP where PWM = 255
-unsigned int max_RPM_right_motor = 33333;                                         //TODO: Zmierzyć
-unsigned int left_motor_RPM, right_motor_RPM;                                     //variables for current motors RPM
-unsigned int left_motor_counter = 0;
-unsigned int right_motor_counter = 0;
+unsigned int ADC_x[8] = {ADC_0, ADC_1, ADC_2, ADC_3, ADC_4, ADC_5, ADC_6, ADC_7}; //Table with pin numbers of each sensor
+int weight[8] = {-450, -300, -180, -64, 64, 180, 300, 450};                       //Table of weights - each sensor is assigned a weight which is the measure of its distance from the centre of the skid (in millimetres) multiplied by 10
+unsigned int treshold = 250;                                                      //Border between ground and line
+int last_error = 0;                                                               //Variable storing the last deviation from line error value (calculated using sensors_error() function)
+unsigned int max_RPM_left_motor = 33333;                                          //Max left motor RMP where PWM = 255; TODO: Zmierzyć!!!!!!!!!!!!!!!!!!!!
+unsigned int max_RPM_right_motor = 33333;                                         //Max left motor RMP where PWM = 255; TODO: Zmierzyć!!!!!!!!!!!!!!!!!!!!
+unsigned int left_motor_RPM = 0, right_motor_RPM = 0;                             //Variables for current motors RPM
+unsigned int left_encoder_deltas[3] = {0, 0, 0};                                  //Array for storing the last three measurements of the time of change of state of the left encoder, it is also a filter
+unsigned int right_encoder_deltas[3] = {0, 0, 0};                                 //Array for storing the last three measurements of the time of change of state of the right encoder
+unsigned int previous_time_left_encoder = 0;
+unsigned int previous_time_right_encoder = 0;
 unsigned int current_time = 0;
-unsigned int previous_time = 0;
 int current_left_encoder_state = 0;
 int previous_left_encoder_state = 0;
 int current_right_encoder_state = 0;
 int previous_right_encoder_state = 0;
 int normal_speed = 100;
-int state = 0;
-int last_error = 0;
+int state = 0; //Variable indicating whether the robot should move
 int output_sensors = 0;
 
 //PID global values
@@ -88,85 +89,6 @@ void printSendorData() //Function reads values using SensorsRead() and writes th
     delay(200);
 }
 
-void countLeftEncoder() //Function counts left encoder state changes (only on one channel(MOTOR1_L) - 6 counts per revolution)
-{
-    current_left_encoder_state = digitalRead(MOTOR1_L);
-    if (current_left_encoder_state != previous_left_encoder_state)
-    {
-        left_motor_counter++;
-        // if (digitalRead(MOTOR2_L) != current_left_encoder_state){
-        //     left_motor_counter++;
-        // }
-    }
-    // else if (current_left_encoder_state == previous_left_encoder_state){
-    //     if (digitalRead(MOTOR2_L) != current_left_encoder_state){
-    //     right_motor_counter++;
-    //     }
-    // }
-    previous_left_encoder_state = current_left_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
-}
-
-void countRightEncoder() //Function counts right encoder state changes (only on one channel(MOTOR1_R) - 6 counts per revolution)
-{
-    current_right_encoder_state = digitalRead(MOTOR1_R);
-    if (current_right_encoder_state != previous_right_encoder_state)
-    {
-        right_motor_counter++;
-        // if (digitalRead(MOTOR2_R) == current_right_encoder_state){
-        //     right_motor_counter++;
-        // }
-    }
-    // else if (current_right_encoder_state == previous_right_encoder_state){
-    //     if (digitalRead(MOTOR2_R) != current_right_encoder_state){
-    //         right_motor_counter++;
-    //     }
-    // }
-    previous_right_encoder_state = current_right_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
-}
-
-void currentLeftMotorRPM() //Function measures and calculates the current left motor RPM
-{                          //TODO: Postarać się skrócić czas pomiarów
-    left_motor_counter = 0;
-    previous_time = millis();
-
-    while ((millis() - previous_time) < 100)
-    {
-        countLeftEncoder();
-    }
-
-    left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
-    // left_motor_RPM = left_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
-}
-
-void currentMotorRPM() //Function measures and calculates the current left motor RPM
-{                      //TODO: Postarać się skrócić czas pomiarów
-    left_motor_counter = 0;
-    previous_time = millis();
-
-    while ((millis() - previous_time) < 100)
-    {
-        countLeftEncoder();
-        countLeftEncoder();
-    }
-
-    left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
-    // left_motor_RPM = left_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
-}
-
-void currentRightMotorRPM() //Function measures and calculates the current right motor RPM
-{
-    right_motor_counter = 0;
-    previous_time = millis();
-
-    while ((millis() - previous_time) < 100)
-    {
-        countRightEncoder();
-    }
-
-    right_motor_RPM = right_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
-    // right_motor_RPM = right_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
-}
-
 int sensors_error() //Function calculates the value of sensores regulation error
 {
     int error = 0;
@@ -196,7 +118,8 @@ int sensors_error() //Function calculates the value of sensores regulation error
 
 int left_motor_PWM() //Function calculates the value of left motor PWM
 {
-    currentLeftMotorRPM();
+    int time_avg = (left_encoder_deltas[0] + (2 * left_encoder_deltas[1]) + (3 * left_encoder_deltas[2])) / 6;
+    left_motor_RPM = 60000000 / time_avg;
     int error = map(left_motor_RPM, 0, max_RPM_left_motor, 0, 255);
 
     return error;
@@ -204,7 +127,8 @@ int left_motor_PWM() //Function calculates the value of left motor PWM
 
 int right_motor_PWM() //Function calculates the value of right motor PWM
 {
-    currentRightMotorRPM();
+    int time_avg = (right_encoder_deltas[0] + (2 * right_encoder_deltas[1]) + (3 * right_encoder_deltas[2])) / 6;
+    left_motor_RPM = 60000000 / time_avg;
     int error = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
 
     return error;
@@ -269,10 +193,17 @@ void setup()
     myPID_right_motor.SetOutputLimits(0, 255);
 }
 
+int loop_test = 0;
+int left_encoder_test = 0;
+int right_encoder_test = 0;
+
 void loop()
-{
+{ //Sprawdzić czy pętla główna wykona się 10x szybciej niż będą zliczały się enkodery!!!
     if (state == 1)
     {
+        loop_test++; //TEST - DO USUNIĘCIA
+
+        //Calculate the new setpoint for the motors (new speed at which they are currently moving)
         output_sensors = sensors_error();
         int output_sensors_ = map(abs(output_sensors), 0, 450, 0, 50);
 
@@ -287,26 +218,49 @@ void loop()
             setpoint_right_motor = normal_speed - output_sensors_;
         }
 
-        input_left_motor = left_motor_PWM();
-        input_right_motor = right_motor_PWM();
+        //Measure time of one state change of the left encoder
+        current_left_encoder_state = digitalRead(MOTOR1_L);
+        if (current_left_encoder_state != previous_left_encoder_state)
+        {
+            left_encoder_test++; //TEST - DO USUNIĘCIA
 
-        //test
+            previous_left_encoder_state = current_left_encoder_state;
+            left_encoder_deltas[0] = left_encoder_deltas[1];
+            left_encoder_deltas[1] = left_encoder_deltas[2];
+            current_time = micros();
+            left_encoder_deltas[2] = current_time - previous_time_left_encoder;
+            previous_time_left_encoder = current_time;
 
-        Serial.print("* ");
-        Serial.print(output_sensors);
-        Serial.print(" ");
-        Serial.print(setpoint_left_motor);
-        Serial.print(" ");
-        Serial.print(setpoint_right_motor);
-        Serial.print(" ");
-        Serial.print(input_left_motor);
-        Serial.print(" ");
-        Serial.print(input_right_motor);
-        Serial.println(" ");
+            input_left_motor = left_motor_PWM();
+        }
+
+        //Measure time of one state change of the right encoder
+        current_right_encoder_state = digitalRead(MOTOR1_R);
+        if (current_right_encoder_state != previous_right_encoder_state)
+        {
+            right_encoder_test++; //TEST - DO USUNIĘCIA
+
+            previous_right_encoder_state = current_right_encoder_state;
+            right_encoder_deltas[0] = right_encoder_deltas[1];
+            right_encoder_deltas[1] = right_encoder_deltas[2];
+            current_time = micros();
+            right_encoder_deltas[2] = current_time - previous_time_right_encoder;
+            previous_time_right_encoder = current_time;
+
+            input_right_motor = right_motor_PWM();
+        }
+
         myPID_left_motor.Compute();
         myPID_right_motor.Compute();
 
         drive(output_left_motor, output_right_motor);
+
+        Serial.print("Loop: ");
+        Serial.print(loop_test);
+        Serial.print(", Left Encoder: ");
+        Serial.print(left_encoder_test);
+        Serial.print(", Right Encoder: ");
+        Serial.println(right_encoder_test);
     }
     else
     {
