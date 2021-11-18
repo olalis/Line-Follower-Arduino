@@ -40,7 +40,7 @@ int previous_left_encoder_state = 0;
 int current_right_encoder_state = 0;
 int previous_right_encoder_state = 0;
 int normal_speed = 100;
-int state = 1;
+int state = 0;
 int last_error = 0;
 int output_sensors = 0;
 
@@ -94,7 +94,15 @@ void countLeftEncoder() //Function counts left encoder state changes (only on on
     if (current_left_encoder_state != previous_left_encoder_state)
     {
         left_motor_counter++;
+        // if (digitalRead(MOTOR2_L) != current_left_encoder_state){
+        //     left_motor_counter++;
+        // }
     }
+    // else if (current_left_encoder_state == previous_left_encoder_state){
+    //     if (digitalRead(MOTOR2_L) != current_left_encoder_state){
+    //     right_motor_counter++;
+    //     }
+    // }
     previous_left_encoder_state = current_left_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
 }
 
@@ -104,7 +112,15 @@ void countRightEncoder() //Function counts right encoder state changes (only on 
     if (current_right_encoder_state != previous_right_encoder_state)
     {
         right_motor_counter++;
+        // if (digitalRead(MOTOR2_R) == current_right_encoder_state){
+        //     right_motor_counter++;
+        // }
     }
+    // else if (current_right_encoder_state == previous_right_encoder_state){
+    //     if (digitalRead(MOTOR2_R) != current_right_encoder_state){
+    //         right_motor_counter++;
+    //     }
+    // }
     previous_right_encoder_state = current_right_encoder_state; // Updates the previous state of the MOTOR1_L with the current state
 }
 
@@ -119,6 +135,22 @@ void currentLeftMotorRPM() //Function measures and calculates the current left m
     }
 
     left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
+    // left_motor_RPM = left_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
+}
+
+void currentMotorRPM() //Function measures and calculates the current left motor RPM
+{                      //TODO: Postarać się skrócić czas pomiarów
+    left_motor_counter = 0;
+    previous_time = millis();
+
+    while ((millis() - previous_time) < 100)
+    {
+        countLeftEncoder();
+        countLeftEncoder();
+    }
+
+    left_motor_RPM = left_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
+    // left_motor_RPM = left_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
 }
 
 void currentRightMotorRPM() //Function measures and calculates the current right motor RPM
@@ -132,6 +164,7 @@ void currentRightMotorRPM() //Function measures and calculates the current right
     }
 
     right_motor_RPM = right_motor_counter * 100; // 6 counts per roration; (counter/6) in 100ms gives ((counter/6)*(60 * 1000ms))/100 ms = (100*counter) rotation per minute(RPM)
+    // right_motor_RPM = right_motor_counter * 200; // 12 counts per roration; (counter/12) in t ms gives ((counter/6)*(60 * 1000ms))/t ms = (5000*counter/t) rotation per minute(RPM)
 }
 
 int sensors_error() //Function calculates the value of sensores regulation error
@@ -172,7 +205,7 @@ int left_motor_PWM() //Function calculates the value of left motor PWM
 int right_motor_PWM() //Function calculates the value of right motor PWM
 {
     currentRightMotorRPM();
-    int error = int error = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
+    int error = map(right_motor_RPM, 0, max_RPM_right_motor, 0, 255);
 
     return error;
 }
@@ -218,6 +251,8 @@ void setup()
     pinMode(STBY, OUTPUT);
 
     digitalWrite(STBY, HIGH);
+    previous_right_encoder_state = digitalRead(MOTOR1_R);
+    previous_left_encoder_state = digitalRead(MOTOR1_L);
 
     //Left Motor PID
     input_left_motor = 0;
