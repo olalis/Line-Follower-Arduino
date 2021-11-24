@@ -34,6 +34,8 @@ unsigned int max_RPM_right_motor = 33333;                                       
 unsigned int left_motor_RPM = 0, right_motor_RPM = 0;                             //Variables for current motors RPM
 unsigned int left_encoder_deltas[3] = {0, 0, 0};                                  //Array for storing the last three measurements of the time of change of state of the left encoder, it is also a filter
 unsigned int right_encoder_deltas[3] = {0, 0, 0};                                 //Array for storing the last three measurements of the time of change of state of the right encoder
+unsigned int left_encoder_counter = 0;
+unsigned int right_encoder_counter = 0;
 unsigned int previous_time_left_encoder = 0;
 unsigned int previous_time_right_encoder = 0;
 unsigned int current_time = 0;
@@ -181,8 +183,8 @@ int left_encoder_test = 0;
 int right_encoder_test = 0;
 //
 
-unsigned int left_encoder_counter = 0;
-unsigned int right_encoder_counter = 0;
+// unsigned int left_encoder_counter = 0;
+// unsigned int right_encoder_counter = 0;
 
 void loop()
 { //Sprawdzić czy pętla główna wykona się 10x szybciej niż będą zliczały się enkodery!!!
